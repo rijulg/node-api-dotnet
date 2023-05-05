@@ -1831,6 +1831,14 @@ public class JSMarshaller
                 statements = BuildFromJSToStructExpressions(toType, variables, valueParameter);
             }
         }
+        else if (toType == typeof(object))
+        {
+            MethodInfo toObject = typeof(JSValue).GetStaticMethod(nameof(JSValue.ToObject));
+            statements = new[]
+            {
+                Expression.Convert(valueParameter, toType, toObject),
+            };
+        }
         else if (IsSettableUntypedCollectionType(toType))
         {
             statements = BuildFromJSToUntypedCollectionExpressions(toType, variables, valueParameter);
@@ -2020,6 +2028,14 @@ public class JSMarshaller
             {
                 statements = BuildToJSFromStructExpressions(fromType, variables, valueExpression);
             }
+        }
+        else if (fromType == typeof(object))
+        {
+            MethodInfo fromObject = typeof(JSValue).GetStaticMethod(nameof(JSValue.FromObject));
+            statements = new[]
+            {
+                Expression.Convert(valueExpression, typeof(JSValue), fromObject),
+            };
         }
         else if (IsGettableUntypedCollectionType(fromType))
         {
@@ -2729,7 +2745,7 @@ public class JSMarshaller
             {typeof(System.Collections.ArrayList), nameof(JSCollectionExtensions.AsArrayList)},
             {typeof(System.Array), nameof(JSCollectionExtensions.AsArrayClass)},
         };
-        Type elementType = typeof(int); // TODO: Fix this harcoded element type
+        Type elementType = typeof(object);
         Type jsCollectionType = typeof(JSArray);
         MethodInfo asCollectionMethod = typeof(JSCollectionExtensions).GetStaticMethod(
             funcMap[toType],
@@ -2756,7 +2772,7 @@ public class JSMarshaller
         ICollection<ParameterExpression> variables,
         Expression valueExpression)
     {
-        Type elementType = typeof(int); // TODO: Fix this harcoded element type
+        Type elementType = typeof(object);
         /*
         * JSRuntimeContext.Current.GetOrCreateCollectionWrapper(
         *     value, (value) => (JSValue)value, (value) => (ElementType)value);

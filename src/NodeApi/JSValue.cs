@@ -2,7 +2,10 @@
 // Licensed under the MIT License.
 
 using System;
+using System.Collections.Generic;
 using System.Diagnostics.CodeAnalysis;
+using System.Linq;
+using System.Reflection;
 using System.Runtime.InteropServices;
 using System.Text;
 using Microsoft.JavaScript.NodeApi.Interop;
@@ -317,6 +320,31 @@ public readonly struct JSValue : IEquatable<JSValue>
                 Env, signBit, (nuint)words.Length, wordPtr, out napi_value result)
                 .ThrowIfFailed(result);
         }
+    }
+
+    private static Dictionary<Type, Func<JSValue, object>> _objectFromJsConverters = new Dictionary<Type, Func<JSValue, object>> {
+        {typeof(int), (JSValue value) => (int) value},
+    };
+    public static JSValue FromObject(object value)
+    {
+        Type valueType = value.GetType();
+        var methodInfo = typeof(JSValue)
+            .GetMethods(BindingFlags.Public | BindingFlags.Static)
+            .Where((m) =>
+                m.Name == "op_Implicit" &&
+                m.ReturnType == typeof(JSValue) &&
+                m.GetParameters().Length == 1 &&
+                m.GetParameters()[0].ParameterType == valueType
+            )
+            .SingleOrDefault();
+        return (JSValue) methodInfo!.Invoke(methodInfo, new object[] {value})!;
+    }
+    public static object ToObject(JSValue value)
+    {
+        if (value.IsString()) {
+            return (string) value;
+        }
+        throw new Exception("Unsupported value type in Object");
     }
 
     public static implicit operator JSValue(bool value) => GetBoolean(value);

@@ -333,7 +333,7 @@ public sealed class JSRuntimeContext : IDisposable
             {
                 JSProxy.Handler proxyHandler = _collectionProxyHandlerMap.GetOrAdd(
                     typeof(Array),
-                    (_) => CreateArrayProxyHandlerForList(toJS, fromJS));
+                    (_) => CreateArrayProxyHandlerForArray(toJS, fromJS));
                 return new JSProxy(new JSArray(), proxyHandler, collection);
             });
     }
