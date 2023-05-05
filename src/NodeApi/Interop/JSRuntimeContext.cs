@@ -2,6 +2,7 @@
 // Licensed under the MIT License.
 
 using System;
+using System.Collections;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.IO;
@@ -305,6 +306,36 @@ public sealed class JSRuntimeContext : IDisposable
             });
 
         return wrapper!.Value;
+    }
+
+    public JSValue GetOrCreateCollectionWrapper<T>(
+        ArrayList collection,
+        JSValue.From<T> toJS,
+        JSValue.To<T> fromJS)
+    {
+        return collection is JSArrayListType<T> adapter ? adapter.Value :
+            GetOrCreateCollectionProxy(collection, () =>
+            {
+                JSProxy.Handler proxyHandler = _collectionProxyHandlerMap.GetOrAdd(
+                    typeof(ArrayList),
+                    (_) => CreateArrayProxyHandlerForArrayList(toJS, fromJS));
+                return new JSProxy(new JSArray(), proxyHandler, collection);
+            });
+    }
+
+    public JSValue GetOrCreateCollectionWrapper<T>(
+        Array collection,
+        JSValue.From<T> toJS,
+        JSValue.To<T> fromJS)
+    {
+        return collection is JSArrayList<T> adapter ? adapter.Value :
+            GetOrCreateCollectionProxy(collection, () =>
+            {
+                JSProxy.Handler proxyHandler = _collectionProxyHandlerMap.GetOrAdd(
+                    typeof(Array),
+                    (_) => CreateArrayProxyHandlerForList(toJS, fromJS));
+                return new JSProxy(new JSArray(), proxyHandler, collection);
+            });
     }
 
     public JSValue GetOrCreateCollectionWrapper<T>(

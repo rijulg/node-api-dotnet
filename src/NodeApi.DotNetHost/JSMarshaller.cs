@@ -1831,6 +1831,10 @@ public class JSMarshaller
                 statements = BuildFromJSToStructExpressions(toType, variables, valueParameter);
             }
         }
+        else if (IsSettableUntypedCollectionType(toType))
+        {
+            statements = BuildFromJSToUntypedCollectionExpressions(toType, variables, valueParameter);
+        }
         else if (IsSettableCollectionType(toType))
         {
             statements = BuildFromJSToCollectionExpressions(toType, variables, valueParameter);
@@ -2017,6 +2021,10 @@ public class JSMarshaller
                 statements = BuildToJSFromStructExpressions(fromType, variables, valueExpression);
             }
         }
+        else if (IsGettableUntypedCollectionType(fromType))
+        {
+            statements = BuildToJSFromUntypedCollectionExpressions(fromType, variables, valueExpression);
+        }
         else if (IsGettableCollectionType(fromType))
         {
             statements = BuildToJSFromCollectionExpressions(fromType, variables, valueExpression);
@@ -2124,6 +2132,20 @@ public class JSMarshaller
             );
         }
         return isCollectionInterface || isExportedCollectionType;
+    }
+    private static bool IsSettableUntypedCollectionType(Type fromType) {
+        Type[] exportedClassCollections = {
+            typeof(System.Array),
+            typeof(System.Collections.ArrayList),
+        };
+        return exportedClassCollections.Contains(fromType);
+    }
+    private static bool IsGettableUntypedCollectionType(Type fromType) {
+        Type[] exportedClassCollections = {
+            typeof(System.Array),
+            typeof(System.Collections.ArrayList),
+        };
+        return exportedClassCollections.Contains(fromType);
     }
 
     private LambdaExpression BuildConvertFromJSPromiseExpression(Type toType)
@@ -2697,6 +2719,58 @@ public class JSMarshaller
             // cases it may block use of the rest of the (supported) members of the type.
             yield return Expression.Default(typeof(JSValue));
         }
+    }
+    private IEnumerable<Expression> BuildFromJSToUntypedCollectionExpressions(
+        Type toType,
+        ICollection<ParameterExpression> variables,
+        Expression valueExpression)
+    {
+        var funcMap = new Dictionary<Type, string> {
+            {typeof(System.Collections.ArrayList), nameof(JSCollectionExtensions.AsArrayList)},
+            {typeof(System.Array), nameof(JSCollectionExtensions.AsArrayClass)},
+        };
+        Type elementType = typeof(int); // TODO: Fix this harcoded element type
+        Type jsCollectionType = typeof(JSArray);
+        MethodInfo asCollectionMethod = typeof(JSCollectionExtensions).GetStaticMethod(
+            funcMap[toType],
+            new[] { jsCollectionType, typeof(JSValue.To<>), typeof(JSValue.From<>) },
+            elementType
+        );
+        MethodInfo asJSCollectionMethod = jsCollectionType.GetExplicitConversion(
+            typeof(JSValue),
+            jsCollectionType
+        );
+        yield return Expression.Coalesce(
+            Expression.TypeAs(Expression.Call(s_tryUnwrap, valueExpression), toType),
+            Expression.Call(
+                asCollectionMethod,
+                Expression.Convert(valueExpression, jsCollectionType, asJSCollectionMethod),
+                GetFromJSValueExpression(elementType),
+                GetToJSValueExpression(elementType)
+            )
+        );
+        
+    }
+    private IEnumerable<Expression> BuildToJSFromUntypedCollectionExpressions(
+        Type fromType,
+        ICollection<ParameterExpression> variables,
+        Expression valueExpression)
+    {
+        Type elementType = typeof(int); // TODO: Fix this harcoded element type
+        /*
+        * JSRuntimeContext.Current.GetOrCreateCollectionWrapper(
+        *     value, (value) => (JSValue)value, (value) => (ElementType)value);
+        */
+        MethodInfo wrapMethod = typeof(JSRuntimeContext).GetInstanceMethod(
+                nameof(JSRuntimeContext.GetOrCreateCollectionWrapper),
+                new[] { fromType, typeof(JSValue.From<>), typeof(JSValue.To<>) },
+                elementType);
+        yield return Expression.Call(
+            Expression.Property(null, s_context),
+            wrapMethod,
+            valueExpression,
+            GetToJSValueExpression(elementType),
+            GetFromJSValueExpression(elementType));
     }
 
     private static MethodInfo? GetCastFromJSValueMethod(Type toType)

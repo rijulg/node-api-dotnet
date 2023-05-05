@@ -2,6 +2,8 @@
 // Licensed under the MIT License.
 
 using System;
+using System.Linq;
+using System.Collections;
 using System.Collections.Generic;
 using System.Diagnostics.CodeAnalysis;
 using System.Threading;
@@ -69,6 +71,20 @@ public static class JSCollectionExtensions
     public static List<T> AsListClass<T>(this JSArray array, JSValue.To<T> fromJS, JSValue.From<T> toJS)
         => ((JSValue)array).IsNullOrUndefined() ? null! :
             new JSArrayListClass<T>((JSValue)array, fromJS, toJS);
+            
+    /// <summary>
+    /// Creates a list adapter for a JS Array object, without copying.
+    /// </summary>
+    public static ArrayList AsArrayList<T>(this JSArray array, JSValue.To<T> fromJS, JSValue.From<T> toJS)
+        => ((JSValue)array).IsNullOrUndefined() ? null! :
+            new JSArrayListType<T>((JSValue)array, fromJS, toJS);
+            
+    /// <summary>
+    /// Creates a list adapter for a JS Array object, without copying.
+    /// </summary>
+    public static Array AsArrayClass<T>(this JSArray array, JSValue.To<T> fromJS, JSValue.From<T> toJS)
+        => (((JSValue)array).IsNullOrUndefined() ? null! :
+            new JSArrayList<T>((JSValue)array, fromJS, toJS)).Cast<T>().ToArray();
 
     /// <summary>
     /// Creates an enumerable adapter for a JS Set object, without copying.
@@ -430,6 +446,43 @@ internal class JSArrayListClass<T> : List<T>, IEnumerable<T>, IEquatable<JSValue
         }
     }
 
+}
+
+internal class JSArrayListType<T> : ArrayList, IEnumerable, IEquatable<JSValue>
+{
+    protected JSValue.To<T> FromJS { get; }
+    protected JSValue.From<T> ToJS { get; }
+    private readonly JSReference _iterableReference;
+    internal JSArrayListType(JSValue array, JSValue.To<T> fromJS, JSValue.From<T> toJS)
+    {
+        ToJS = toJS;
+        _iterableReference = new JSReference(array);
+        FromJS = fromJS;
+    }
+
+    public JSValue Value => _iterableReference.GetValue()!.Value;
+    public new int Count => Value.GetArrayLength();
+
+    bool IEquatable<JSValue>.Equals(JSValue other) => Value.Equals(other);
+
+    public new IEnumerator<T> GetEnumerator() => new JSIterableEnumerator<T>(Value, FromJS);
+
+    System.Collections.IEnumerator System.Collections.IEnumerable.GetEnumerator()
+        => GetEnumerator();
+
+    public void Dispose()
+    {
+        // Do not change this code. Put cleanup code in 'Dispose(bool disposing)' method
+        Dispose(disposing: true);
+    }
+
+    protected virtual void Dispose(bool disposing)
+    {
+        if (disposing)
+        {
+            _iterableReference.Dispose();
+        }
+    }
 }
 
 internal class JSSetReadOnlyCollection<T> : JSIterableEnumerable<T>, IReadOnlyCollection<T>
